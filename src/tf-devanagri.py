@@ -4,18 +4,18 @@ from scipy import misc
 import tensorflow as tf
 import scipy.ndimage.morphology as morph
 
-resize_factor = (80,80)
-dilation_iter = 3 
-learning_rate = 0.001
+resize_factor = (32,32)
+dilation_iter = 3
+learning_rate = 0.003
 drop_out_prob = 0.5
 p_keep_conv   = 0.5
 p_keep_hidden = 0.5
 n_epoch       = 50
-batch_size    = 128 
-test_size     = 1000
+batch_size    = 128
+test_size     = 1828
 
 def resize_erode(image):
-    return  morph.binary_dilation(misc.imresize(255.0 - image,resize_factor),iterations=dilation_iter)
+    return  misc.imresize(morph.binary_dilation(255.0 - image, iterations=dilation_iter),resize_factor)
 
 def extract_images(dir,N):
     training_inputs = np.asarray([resize_erode(misc.imread(dir+str(i)+'.png')) for i in range(N)])
@@ -95,7 +95,7 @@ if __name__ == '__main__':
 
     print X_test.shape, X_train.shape
 
-    X = tf.placeholder("float", [None, 80, 80, 1])
+    X = tf.placeholder("float", [None, 32, 32, 1])
     y = tf.placeholder("float", [None, 104])
 
     conv_layers = [32,64,128]
@@ -105,8 +105,8 @@ if __name__ == '__main__':
     w2 = init_weights([5, 5, 32, 64])        # Conv2 5x5x32, 64 outputs
     w3 = init_weights([3, 3, 64, 128])       # Conv2 3x3x32, 128 outputs
     w4 = init_weights([3, 3, 128, 256])
-    w5 = init_weights([256 * 5 * 5, 2048]) # Dense 128 * 10 * 10 inputs, 1024 outputs
-    w_o = init_weights([2048, 104])          # Dense 1024 inputs, 104 outputs (labels)
+    w5 = init_weights([256 * 2 * 2, 1024]) # Dense 128 * 10 * 10 inputs, 1024 outputs
+    w_o = init_weights([1024, 104])          # Dense 1024 inputs, 104 outputs (labels)
 
     p_keep_conv = tf.placeholder("float")
     p_keep_hidden = tf.placeholder("float")
