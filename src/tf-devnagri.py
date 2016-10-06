@@ -5,12 +5,12 @@ import tensorflow as tf
 import scipy.ndimage.morphology as morph
 
 resize_factor = (80,80)
-dilation_iter = 3
+dilation_iter = 3 
 learning_rate = 0.001
 drop_out_prob = 0.5
 p_keep_conv   = 0.5
 p_keep_hidden = 0.5
-n_epoch       = 50 
+n_epoch       = 50
 batch_size    = 128 
 test_size     = 1000
 
@@ -60,7 +60,7 @@ def read_data_sets(tr_dir,va_dir):
 def init_weights(shape):
     return tf.Variable(tf.random_normal(shape, stddev=0.01))
 
-def conv_net(X, w, w2, w3, w4, w_o, p_keep_conv, p_keep_hidden):
+def conv_net(X, w, w2, w3, w4, w5, w_o, p_keep_conv, p_keep_hidden):
     conv2_1 = tf.nn.relu(tf.nn.conv2d(X, w, strides=[1, 1, 1, 1], padding='SAME'))
     mpool1 = tf.nn.max_pool(conv2_1, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
     dropout1 = tf.nn.dropout(mpool1, p_keep_conv)
@@ -71,15 +71,19 @@ def conv_net(X, w, w2, w3, w4, w_o, p_keep_conv, p_keep_hidden):
 
     conv2_3 = tf.nn.relu(tf.nn.conv2d(dropout2, w3, strides=[1, 1, 1, 1], padding='SAME'))
     mpool3 = tf.nn.max_pool(conv2_3, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
-    
-    print(mpool3.get_shape().as_list())
-    mpool3_flat = tf.reshape(mpool3, [-1, w4.get_shape().as_list()[0]])
-    dropout3 = tf.nn.dropout(mpool3_flat, p_keep_conv)
+    dropout3 = tf.nn.dropout(mpool3, p_keep_conv)
 
-    dense1 = tf.nn.relu(tf.matmul(dropout3, w4))
-    dropout4 = tf.nn.dropout(dense1, p_keep_hidden)
+    conv2_4 = tf.nn.relu(tf.nn.conv2d(dropout3, w4, strides=[1, 1, 1, 1],padding='SAME'))
+    mpool4 = tf.nn.max_pool(conv2_4, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
 
-    p_y_X = tf.matmul(dropout4, w_o)
+    print(mpool4.get_shape().as_list())
+    mpool4_flat = tf.reshape(mpool4, [-1, w5.get_shape().as_list()[0]])
+    dropout4 = tf.nn.dropout(mpool4_flat, p_keep_conv)
+
+    dense1 = tf.nn.relu(tf.matmul(dropout4, w5))
+    dropout5 = tf.nn.dropout(dense1, p_keep_hidden)
+
+    p_y_X = tf.matmul(dropout5, w_o)
     return p_y_X
 
 if __name__ == '__main__':
@@ -97,16 +101,17 @@ if __name__ == '__main__':
     conv_layers = [32,64,128]
     dense_layers = [625,104]
 
-    w = init_weights([5, 5, 1, 32])          # Conv2 5x5x1, 32 outputs
+    w = init_weights([7, 7, 1, 32])          # Conv2 5x5x1, 32 outputs
     w2 = init_weights([5, 5, 32, 64])        # Conv2 5x5x32, 64 outputs
     w3 = init_weights([3, 3, 64, 128])       # Conv2 3x3x32, 128 outputs
-    w4 = init_weights([128 * 10 * 10, 1024]) # Dense 128 * 10 * 10 inputs, 1024 outputs
-    w_o = init_weights([1024, 104])          # Dense 1024 inputs, 104 outputs (labels)
+    w4 = init_weights([3, 3, 128, 256])
+    w5 = init_weights([256 * 5 * 5, 2048]) # Dense 128 * 10 * 10 inputs, 1024 outputs
+    w_o = init_weights([2048, 104])          # Dense 1024 inputs, 104 outputs (labels)
 
     p_keep_conv = tf.placeholder("float")
     p_keep_hidden = tf.placeholder("float")
     lrate = tf.placeholder("float")
-    y_ = conv_net(X, w, w2, w3, w4, w_o, p_keep_conv, p_keep_hidden)
+    y_ = conv_net(X, w, w2, w3, w4, w5, w_o, p_keep_conv, p_keep_hidden)
 
     cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(y_, y))
     train_op = tf.train.RMSPropOptimizer(learning_rate, 0.9).minimize(cost)
