@@ -10,9 +10,9 @@ Convolutional Neural Network to identify Devanagri characters implemented in Ten
 
 ### Results and Preprocessing
 
-* 92.4 +/- 0.07 % accuracy on test data.
-* 50 epochs in 45 mins of training time on a 4 GB NVIDIA GT920M GPU and i7 CPU.
-* 10x downsampling to get 80x80 images.
+* 94.6 +/- 0.07 % accuracy on test data.
+* 30 epochs in 30 mins of training time on a 4 GB NVIDIA GT920M GPU and i7 CPU.
+* 10x downsampling to get 32x32 images.
 * 3-iterations of binary dilation to make characters thicker.
 
 ### Network

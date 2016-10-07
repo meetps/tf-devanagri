@@ -4,18 +4,19 @@ from scipy import misc
 import tensorflow as tf
 import scipy.ndimage.morphology as morph
 
-resize_factor = (32,32)
+img_size      = 32
 dilation_iter = 3
 learning_rate = 0.003
 drop_out_prob = 0.5
 p_keep_conv   = 0.5
 p_keep_hidden = 0.5
-n_epoch       = 50
+n_epoch       = 75
 batch_size    = 128
 test_size     = 1828
 
+
 def resize_erode(image):
-    return  misc.imresize(morph.binary_dilation(255.0 - image, iterations=dilation_iter),resize_factor)
+    return  misc.imresize(morph.binary_dilation(255.0 - image, iterations=dilation_iter),(img_size,img_size))
 
 def extract_images(dir,N):
     training_inputs = np.asarray([resize_erode(misc.imread(dir+str(i)+'.png')) for i in range(N)])
@@ -60,23 +61,41 @@ def read_data_sets(tr_dir,va_dir):
 def init_weights(shape):
     return tf.Variable(tf.random_normal(shape, stddev=0.01))
 
-def conv_net(X, w, w2, w3, w4, w5, w_o, p_keep_conv, p_keep_hidden):
-    conv2_1 = tf.nn.relu(tf.nn.conv2d(X, w, strides=[1, 1, 1, 1], padding='SAME'))
+
+def batch_norm(x, n_out, phase_train, scope='bn'):
+    with tf.variable_scope(scope):
+        beta = tf.Variable(tf.constant(0.0, shape=[n_out]),name='beta', trainable=True)
+        gamma = tf.Variable(tf.constant(1.0, shape=[n_out]),name='gamma', trainable=True)
+        batch_mean, batch_var = tf.nn.moments(x, [0,1,2], name='moments')
+        ema = tf.train.ExponentialMovingAverage(decay=0.5)
+
+        def mean_var_with_update():
+            ema_apply_op = ema.apply([batch_mean, batch_var])
+            with tf.control_dependencies([ema_apply_op]):
+                return tf.identity(batch_mean), tf.identity(batch_var)
+
+        mean, var = tf.cond(phase_train,
+                            mean_var_with_update,
+                            lambda: (ema.average(batch_mean), ema.average(batch_var)))
+        normed = tf.nn.batch_normalization(x, mean, var, beta, gamma, 1e-3)
+    return normed
+
+def conv_net(X, w, w2, w3, w4, w5, w_o, p_keep_conv, p_keep_hidden, phase_train):
+    conv2_1 = tf.nn.relu(batch_norm(tf.nn.conv2d(X, w, strides=[1, 1, 1, 1], padding='SAME'), img_size, phase_train))
     mpool1 = tf.nn.max_pool(conv2_1, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
     dropout1 = tf.nn.dropout(mpool1, p_keep_conv)
 
-    conv2_2 = tf.nn.relu(tf.nn.conv2d(dropout1, w2, strides=[1, 1, 1, 1], padding='SAME'))
+    conv2_2 = tf.nn.relu(batch_norm(tf.nn.conv2d(dropout1, w2, strides=[1, 1, 1, 1], padding='SAME'), img_size*2, phase_train))
     mpool2 = tf.nn.max_pool(conv2_2, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
     dropout2 = tf.nn.dropout(mpool2, p_keep_conv)
 
-    conv2_3 = tf.nn.relu(tf.nn.conv2d(dropout2, w3, strides=[1, 1, 1, 1], padding='SAME'))
+    conv2_3 = tf.nn.relu(batch_norm(tf.nn.conv2d(dropout2, w3, strides=[1, 1, 1, 1], padding='SAME'), img_size*4, phase_train))
     mpool3 = tf.nn.max_pool(conv2_3, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
     dropout3 = tf.nn.dropout(mpool3, p_keep_conv)
 
-    conv2_4 = tf.nn.relu(tf.nn.conv2d(dropout3, w4, strides=[1, 1, 1, 1],padding='SAME'))
+    conv2_4 = tf.nn.relu(batch_norm(tf.nn.conv2d(dropout3, w4, strides=[1, 1, 1, 1],padding='SAME'), img_size*8, phase_train))
     mpool4 = tf.nn.max_pool(conv2_4, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
 
-    print(mpool4.get_shape().as_list())
     mpool4_flat = tf.reshape(mpool4, [-1, w5.get_shape().as_list()[0]])
     dropout4 = tf.nn.dropout(mpool4_flat, p_keep_conv)
 
@@ -95,8 +114,9 @@ if __name__ == '__main__':
 
     print X_test.shape, X_train.shape
 
-    X = tf.placeholder("float", [None, 32, 32, 1])
+    X = tf.placeholder("float", [None, img_size, img_size, 1])
     y = tf.placeholder("float", [None, 104])
+    phase_train = tf.placeholder(tf.bool, name='phase_train')
 
     conv_layers = [32,64,128]
     dense_layers = [625,104]
@@ -111,7 +131,7 @@ if __name__ == '__main__':
     p_keep_conv = tf.placeholder("float")
     p_keep_hidden = tf.placeholder("float")
     lrate = tf.placeholder("float")
-    y_ = conv_net(X, w, w2, w3, w4, w5, w_o, p_keep_conv, p_keep_hidden)
+    y_ = conv_net(X, w, w2, w3, w4, w5, w_o, p_keep_conv, p_keep_hidden, phase_train)
 
     cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(y_, y))
     train_op = tf.train.RMSPropOptimizer(learning_rate, 0.9).minimize(cost)
@@ -128,7 +148,8 @@ if __name__ == '__main__':
                                     y: y_train[start:end],
                                     p_keep_conv: 0.8,
                                     p_keep_hidden: 0.5,
-                                    lrate: learning_rate}
+                                    lrate: learning_rate,
+                                    phase_train: True}
                 sess.run(train_op, feed_dict=train_input_dict)
 
             test_indices = np.arange(len(X_test))
@@ -138,6 +159,7 @@ if __name__ == '__main__':
             test_input_dict = {X: X_test[test_indices],
                                y: y_test[test_indices],
                                p_keep_conv: 1.0,
-                               p_keep_hidden: 1.0}
+                               p_keep_hidden: 1.0,
+                               phase_train:False}
             predictions = sess.run(predict_op, feed_dict=test_input_dict)
             print(i, np.mean(np.argmax(y_test[test_indices], axis=1) == predictions))
