@@ -3,7 +3,7 @@ Convolutional Neural Network to identify Devanagri characters implemented in Ten
 
 ### Data
 
-* n_classes = 4
+* n_classes = 104
 * Size = 320x320
 * Format = Binary, PNG
 
