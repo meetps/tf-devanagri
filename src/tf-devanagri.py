@@ -1,4 +1,3 @@
-import cv2
 import numpy as np
 from scipy import misc
 import tensorflow as tf
